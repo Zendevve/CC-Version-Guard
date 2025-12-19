@@ -96,9 +96,10 @@ const COLOR_TEXT_DIM: egui::Color32 = egui::Color32::from_rgb(100, 116, 139);
 #[derive(Clone, PartialEq, Debug)]
 enum WizardScreen {
     Welcome,
-    DownloadManager,  // NEW: Download legacy versions
+    DownloadManager,  // Download legacy versions
     PreCheck,
     VersionSelect,
+    CacheClean,       // Smart Cache Cleaner
     Running,
     Complete,
     Error(String),
@@ -117,6 +118,7 @@ struct VersionInfo {
 enum ProgressStep {
     Scanning,
     CleaningVersions,
+    CleaningCache,
     LockingConfig,
     CreatingBlockers,
     Done,
@@ -127,9 +129,10 @@ impl ProgressStep {
         match self {
             ProgressStep::Scanning => 0,
             ProgressStep::CleaningVersions => 1,
-            ProgressStep::LockingConfig => 2,
-            ProgressStep::CreatingBlockers => 3,
-            ProgressStep::Done => 4,
+            ProgressStep::CleaningCache => 2,
+            ProgressStep::LockingConfig => 3,
+            ProgressStep::CreatingBlockers => 4,
+            ProgressStep::Done => 5,
         }
     }
 }
@@ -166,6 +169,10 @@ struct CapCutGuardApp {
     // Download manager (archive versions)
     selected_archive_idx: Option<usize>,
 
+    // Cache cleaner
+    cache_size_mb: f64,
+    cache_clean_enabled: bool,
+
     // Async
     check_requested: bool,
     fix_requested: bool,
@@ -196,6 +203,8 @@ impl CapCutGuardApp {
             available_versions: Vec::new(),
             selected_version_idx: None,
             selected_archive_idx: None,
+            cache_size_mb: 0.0,
+            cache_clean_enabled: true,
             check_requested: false,
             fix_requested: false,
             tx,
@@ -250,9 +259,10 @@ impl CapCutGuardApp {
                 .collect();
             let selected_version = self.selected_version_idx
                 .and_then(|idx| self.available_versions.get(idx).cloned());
+            let cache_clean_enabled = self.cache_clean_enabled;
 
             thread::spawn(move || {
-                run_fix_sequence(&tx, capcut_path, versions_to_delete, selected_version);
+                run_fix_sequence(&tx, capcut_path, versions_to_delete, selected_version, cache_clean_enabled);
             });
         }
 
@@ -307,6 +317,7 @@ impl eframe::App for CapCutGuardApp {
                     WizardScreen::DownloadManager => self.render_download_manager(ui),
                     WizardScreen::PreCheck => self.render_precheck(ui),
                     WizardScreen::VersionSelect => self.render_version_select(ui),
+                    WizardScreen::CacheClean => self.render_cache_clean(ui),
                     WizardScreen::Running => self.render_running(ui),
                     WizardScreen::Complete => self.render_complete(ui),
                     WizardScreen::Error(e) => self.render_error(ui, e),
@@ -419,102 +430,93 @@ impl CapCutGuardApp {
 
         ui.add_space(20.0);
 
-        // Persona cards Grid
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            egui::Grid::new("persona_grid")
-                .spacing(egui::vec2(16.0, 16.0))
-                .num_columns(2)
-                .show(ui, |ui| {
-                    for (idx, archive) in ARCHIVE_VERSIONS.iter().enumerate() {
-                        let is_selected = self.selected_archive_idx == Some(idx);
-                        let card_color = COLOR_BG_CARD;
-                        let border = if is_selected {
-                            egui::Stroke::new(2.0, COLOR_ACCENT)
-                        } else {
-                            egui::Stroke::new(1.0, COLOR_SECONDARY)
-                        };
+        // Persona cards - Simple vertical list
+        egui::ScrollArea::vertical().max_height(350.0).show(ui, |ui| {
+            for (idx, archive) in ARCHIVE_VERSIONS.iter().enumerate() {
+                let is_selected = self.selected_archive_idx == Some(idx);
+                let card_color = COLOR_BG_CARD;
+                let border = if is_selected {
+                    egui::Stroke::new(2.0, COLOR_ACCENT)
+                } else {
+                    egui::Stroke::new(1.0, COLOR_SECONDARY)
+                };
 
-                        let frame_response = egui::Frame::none()
-                            .fill(card_color)
-                            .rounding(12.0)
-                            .stroke(border)
-                            .inner_margin(16.0)
-                            .outer_margin(egui::Margin::symmetric(0.0, 0.0)) // Margin handled by spacing
-                            .show(ui, |ui| {
-                                ui.set_width(340.0); // Fixed width for consistent grid
+                let frame_response = egui::Frame::none()
+                    .fill(card_color)
+                    .rounding(12.0)
+                    .stroke(border)
+                    .inner_margin(16.0)
+                    .outer_margin(egui::Margin::symmetric(30.0, 4.0))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
 
+                        ui.horizontal(|ui| {
+                            // Icon based on persona
+                            let icon = match idx {
+                                0 => egui_phosphor::fill::HARD_DRIVES,
+                                1 => egui_phosphor::fill::SPEAKER_HIGH,
+                                2 => egui_phosphor::fill::FILM_STRIP,
+                                3 => egui_phosphor::fill::SHIELD_CHECK,
+                                4 => egui_phosphor::fill::SPARKLE,
+                                5 => egui_phosphor::fill::GAUGE,
+                                _ => egui_phosphor::regular::QUESTION,
+                            };
+                            let icon_color = if is_selected { COLOR_SUCCESS } else { COLOR_ACCENT };
+                            ui.label(egui::RichText::new(icon).size(28.0).color(icon_color));
+                            ui.add_space(12.0);
+
+                            ui.vertical(|ui| {
                                 ui.horizontal(|ui| {
-                                    // Icon based on persona
-                                    let icon = match idx {
-                                        0 => egui_phosphor::fill::HARD_DRIVES,
-                                        1 => egui_phosphor::fill::SPEAKER_HIGH,
-                                        2 => egui_phosphor::fill::FILM_STRIP,
-                                        3 => egui_phosphor::fill::SHIELD_CHECK,
-                                        4 => egui_phosphor::fill::SPARKLE,
-                                        5 => egui_phosphor::fill::GAUGE,
-                                        _ => egui_phosphor::regular::QUESTION,
-                                    };
-                                    let icon_color = if is_selected { COLOR_SUCCESS } else { COLOR_ACCENT };
-                                    ui.label(egui::RichText::new(icon).size(28.0).color(icon_color));
-                                    ui.add_space(12.0);
+                                    ui.label(egui::RichText::new(archive.persona).size(15.0).strong().color(COLOR_TEXT));
+                                    ui.label(egui::RichText::new(format!("v{}", archive.version)).size(11.0).color(COLOR_TEXT_DIM));
 
-                                    ui.vertical(|ui| {
-                                        ui.horizontal(|ui| {
-                                            let title_color = if is_selected { COLOR_TEXT } else { COLOR_TEXT };
-                                            ui.label(egui::RichText::new(archive.persona).size(15.0).strong().color(title_color));
-                                            ui.label(egui::RichText::new(format!("v{}", archive.version)).size(11.0).color(COLOR_TEXT_DIM));
+                                    if archive.risk_level == "High" {
+                                        ui.label(egui::RichText::new(egui_phosphor::fill::WARNING).size(14.0).color(COLOR_WARNING));
+                                    }
+                                });
+                                ui.label(egui::RichText::new(archive.description).size(11.0).color(COLOR_TEXT_MUTED));
 
-                                            if archive.risk_level == "High" {
-                                                ui.label(egui::RichText::new(egui_phosphor::fill::WARNING).size(14.0).color(COLOR_WARNING));
-                                            }
-                                        });
-                                        ui.label(egui::RichText::new(archive.description).size(11.0).color(COLOR_TEXT_MUTED));
-
-                                        ui.add_space(6.0);
-                                        ui.horizontal(|ui| {
-                                            for feature in archive.features {
-                                                let badge_color = if is_selected { COLOR_SUCCESS } else { COLOR_TEXT_DIM };
-                                                ui.label(egui::RichText::new(format!("{} {}", egui_phosphor::regular::CHECK, feature)).size(10.0).color(badge_color));
-                                            }
-                                        });
-                                    });
+                                ui.add_space(4.0);
+                                ui.horizontal(|ui| {
+                                    for feature in archive.features {
+                                        let badge_color = if is_selected { COLOR_SUCCESS } else { COLOR_TEXT_DIM };
+                                        ui.label(egui::RichText::new(format!("✓ {}", feature)).size(10.0).color(badge_color));
+                                    }
                                 });
                             });
+                        });
+                    });
 
-                        // Make the customized frame interactive
-                        let response = ui.interact(frame_response.response.rect, egui::Id::new(format!("card_{}", idx)), egui::Sense::click());
-                        if response.clicked() {
-                            self.selected_archive_idx = Some(idx);
-                        }
-
-                        if (idx + 1) % 2 == 0 {
-                            ui.end_row();
-                        }
-                    }
-                });
-
-            ui.add_space(20.0);
-
-            ui.vertical_centered(|ui| {
-                if let Some(idx) = self.selected_archive_idx {
-                    let archive = &ARCHIVE_VERSIONS[idx];
-
-                    // Download button - Direct Link
-                    let btn = egui::Button::new(
-                        egui::RichText::new(format!("{}  Download Installer (v{})", egui_phosphor::regular::DOWNLOAD_SIMPLE, archive.version))
-                            .size(16.0).strong().color(COLOR_TEXT)
-                    )
-                        .fill(COLOR_SUCCESS)
-                        .min_size(egui::vec2(280.0, 50.0))
-                        .rounding(8.0);
-
-                    if ui.add(btn).clicked() {
-                        let _ = open::that(archive.download_url);
-                    }
-
-                    ui.add_space(8.0);
-                    ui.label(egui::RichText::new("Link provided by official ByteDance CDN").size(10.0).color(COLOR_TEXT_MUTED));
+                // Make the card interactive
+                let response = ui.interact(frame_response.response.rect, egui::Id::new(format!("card_{}", idx)), egui::Sense::click());
+                if response.clicked() {
+                    self.selected_archive_idx = Some(idx);
                 }
+            }
+        });
+
+        ui.add_space(20.0);
+
+        ui.vertical_centered(|ui| {
+            if let Some(idx) = self.selected_archive_idx {
+                let archive = &ARCHIVE_VERSIONS[idx];
+
+                // Download button - Direct Link
+                let btn = egui::Button::new(
+                    egui::RichText::new(format!("{}  Download Installer (v{})", egui_phosphor::regular::DOWNLOAD_SIMPLE, archive.version))
+                        .size(16.0).strong().color(COLOR_TEXT)
+                )
+                    .fill(COLOR_SUCCESS)
+                    .min_size(egui::vec2(280.0, 50.0))
+                    .rounding(8.0);
+
+                if ui.add(btn).clicked() {
+                    let _ = open::that(archive.download_url);
+                }
+
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new("Link provided by official ByteDance CDN").size(10.0).color(COLOR_TEXT_MUTED));
+            }
 
             ui.add_space(16.0);
 
@@ -528,7 +530,6 @@ impl CapCutGuardApp {
             if ui.link(egui::RichText::new(format!("{} Back", egui_phosphor::regular::ARROW_LEFT)).size(12.0).color(COLOR_TEXT_DIM)).clicked() {
                 self.screen = WizardScreen::Welcome;
             }
-        });
         });
 
         self.render_footer(ui);
@@ -655,6 +656,7 @@ impl CapCutGuardApp {
                 let steps = [
                     ("System Scan", ProgressStep::Scanning),
                     ("Version Cleanup", ProgressStep::CleaningVersions),
+                    ("Cache Cleaner", ProgressStep::CleaningCache),
                     ("Config Lock", ProgressStep::LockingConfig),
                     ("Update Blocker", ProgressStep::CreatingBlockers),
                 ];
@@ -946,13 +948,93 @@ impl CapCutGuardApp {
                 .rounding(8.0);
 
             if ui.add_enabled(can_proceed, btn).clicked() {
-                self.fix_requested = true;
+                // Calculate cache size and navigate to CacheClean screen
+                if let Some(ref path) = self.capcut_path {
+                    let capcut_root = path.parent().unwrap_or(path).to_path_buf();
+                    self.cache_size_mb = calculate_cache_size(&capcut_root);
+                }
+                self.screen = WizardScreen::CacheClean;
             }
 
             ui.add_space(12.0);
 
             if ui.link(egui::RichText::new(format!("{} Back", egui_phosphor::regular::ARROW_LEFT)).size(13.0).color(COLOR_TEXT_DIM)).clicked() {
                 self.screen = WizardScreen::PreCheck;
+            }
+        });
+
+        self.render_footer(ui);
+    }
+
+    fn render_cache_clean(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(40.0);
+
+        ui.vertical_centered(|ui| {
+            ui.label(egui::RichText::new(egui_phosphor::fill::BROOM).size(48.0).color(COLOR_ACCENT));
+            ui.add_space(10.0);
+            ui.label(egui::RichText::new("Cache Cleaner").size(22.0).strong().color(COLOR_TEXT));
+            ui.label(egui::RichText::new("Free up disk space by removing temporary files").size(13.0).color(COLOR_TEXT_MUTED));
+        });
+
+        ui.add_space(24.0);
+
+        // Cache size info
+        egui::Frame::none()
+            .fill(COLOR_BG_CARD)
+            .rounding(12.0)
+            .inner_margin(20.0)
+            .outer_margin(egui::Margin::symmetric(40.0, 0.0))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(egui_phosphor::fill::HARD_DRIVES).size(24.0).color(COLOR_WARNING));
+                    ui.add_space(12.0);
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new(format!("{:.1} MB recoverable", self.cache_size_mb)).size(18.0).strong().color(COLOR_TEXT));
+                        ui.label(egui::RichText::new("Cache, Proxy, and Smart Crop files").size(12.0).color(COLOR_TEXT_MUTED));
+                    });
+                });
+
+                ui.add_space(16.0);
+                ui.checkbox(&mut self.cache_clean_enabled, egui::RichText::new("Include cache cleaning in protection").color(COLOR_TEXT));
+            });
+
+        ui.add_space(20.0);
+
+        egui::Frame::none()
+            .fill(COLOR_BG_CARD)
+            .rounding(8.0)
+            .inner_margin(12.0)
+            .outer_margin(egui::Margin::symmetric(40.0, 0.0))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(egui_phosphor::regular::INFO).size(14.0).color(COLOR_ACCENT));
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("This will NOT delete your projects or effects.").size(11.0).color(COLOR_TEXT_MUTED));
+                });
+            });
+
+        ui.add_space(24.0);
+
+        ui.vertical_centered(|ui| {
+            let btn = egui::Button::new(
+                egui::RichText::new(format!("{}  Apply Protection", egui_phosphor::regular::SHIELD_CHECK))
+                    .size(15.0).strong().color(COLOR_TEXT)
+            )
+                .fill(COLOR_SUCCESS)
+                .min_size(egui::vec2(200.0, 44.0))
+                .rounding(8.0);
+
+            if ui.add(btn).clicked() {
+                self.fix_requested = true;
+            }
+
+            ui.add_space(12.0);
+
+            if ui.link(egui::RichText::new(format!("{} Back", egui_phosphor::regular::ARROW_LEFT)).size(13.0).color(COLOR_TEXT_DIM)).clicked() {
+                self.screen = WizardScreen::VersionSelect;
             }
         });
 
@@ -980,6 +1062,7 @@ fn run_fix_sequence(
     capcut_path: Option<PathBuf>,
     versions_to_delete: Vec<PathBuf>,
     selected_version: Option<VersionInfo>,
+    cache_clean_enabled: bool,
 ) {
     let _ = tx.send(WorkerMessage::StepUpdate(ProgressStep::Scanning));
     let _ = tx.send(WorkerMessage::LogMessage(">> Checking system state...".to_string()));
@@ -1039,6 +1122,26 @@ fn run_fix_sequence(
         return;
     }
     let _ = tx.send(WorkerMessage::LogMessage("[OK] Configuration locked".to_string()));
+
+    // Step 3.5: Clean cache (if enabled)
+    if cache_clean_enabled {
+        let _ = tx.send(WorkerMessage::StepUpdate(ProgressStep::CleaningCache));
+        let _ = tx.send(WorkerMessage::LogMessage(">> Cleaning cache directories...".to_string()));
+        thread::sleep(Duration::from_millis(300));
+
+        match clean_cache_dirs(&capcut_root, tx) {
+            Ok(bytes) => {
+                let mb = bytes as f64 / (1024.0 * 1024.0);
+                let _ = tx.send(WorkerMessage::LogMessage(format!("[OK] Cleaned {:.1} MB of cache", mb)));
+            }
+            Err(e) => {
+                let _ = tx.send(WorkerMessage::LogMessage(format!("[!] Cache warning: {}", e)));
+            }
+        }
+    } else {
+        let _ = tx.send(WorkerMessage::StepUpdate(ProgressStep::CleaningCache));
+        let _ = tx.send(WorkerMessage::LogMessage(">> Skipping cache cleaning (disabled)".to_string()));
+    }
 
     // Step 4: Create blockers
     let _ = tx.send(WorkerMessage::StepUpdate(ProgressStep::CreatingBlockers));
@@ -1204,4 +1307,46 @@ fn unset_readonly_recursive(path: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+// --- Cache Cleaner ---
+fn get_cache_dirs(capcut_root: &Path) -> Vec<PathBuf> {
+    let user_data = capcut_root.join("User Data");
+    vec![
+        user_data.join("Cache"),
+        user_data.join("Shadow_Cache"),
+        user_data.join("Smart_Crop"),
+    ]
+}
+
+fn calculate_cache_size(capcut_root: &Path) -> f64 {
+    let dirs = get_cache_dirs(capcut_root);
+    let total_bytes: u64 = dirs.iter()
+        .filter(|d| d.exists())
+        .map(|d| calculate_dir_size(d))
+        .sum();
+    total_bytes as f64 / (1024.0 * 1024.0)
+}
+
+fn clean_cache_dirs(capcut_root: &Path, tx: &std::sync::mpsc::Sender<WorkerMessage>) -> Result<u64, String> {
+    let dirs = get_cache_dirs(capcut_root);
+    let mut total_cleaned: u64 = 0;
+
+    for dir in dirs {
+        if dir.exists() {
+            let name = dir.file_name().unwrap_or_default().to_string_lossy();
+            let size = calculate_dir_size(&dir);
+            let _ = tx.send(WorkerMessage::LogMessage(format!(">> Cleaning: {} ({:.1} MB)", name, size as f64 / (1024.0 * 1024.0))));
+
+            if let Err(e) = unset_readonly_recursive(&dir) {
+                let _ = tx.send(WorkerMessage::LogMessage(format!("[!] Warning: {}", e)));
+            }
+            if let Err(e) = fs::remove_dir_all(&dir) {
+                let _ = tx.send(WorkerMessage::LogMessage(format!("[!] Failed to clean {}: {}", name, e)));
+            } else {
+                total_cleaned += size;
+            }
+        }
+    }
+    Ok(total_cleaned)
 }

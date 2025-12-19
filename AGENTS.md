@@ -73,6 +73,10 @@ If no new rule is detected → do not update the file.
 
 - Never commit secrets or API keys
 - Never ship without testing the built exe
+- Never force push to main
+- Never approve or merge (human decision)
+- **Never block core application functionality** (e.g., effects, asset downloads). Blocking must be scoped strictly to auto-update mechanisms.
+- **ALWAYS strictly follow MCAF phases** (Planning -> Execution -> Verification). Never skip directly to coding.
 - Never ignore user frustration signals — add emphatic rules immediately
 
 ### Boundaries
