@@ -30,8 +30,11 @@ Guide users to download legacy CapCut versions from ProjectBukkit by presenting 
 - Personas represent use-case archetypes:
   - **Offline Purist** (v1.5.0): Clean UI, 4K export, zero cloud
   - **Audio Engineer** (v2.5.4): Multi-track audio, stable mixer
-  - **Creator** (v3.9.0): Last free Auto-Captions (API risk)
-- All download buttons link to: `https://github.com/ProjectBukkit/CapcutVersions`
+  - **Classic Pro** (v2.9.0): Most free features (Legacy UI)
+  - **Modern Stable** (v3.2.0): Good balance
+  - **Creator** (v3.9.0): Last free Auto-Captions (High Risk)
+  - **Power User** (v4.0.0): Track height, markers (Stricter Paywall)
+- All download buttons use **Direct CDN Links** (.exe) from `lf16-capcut.faceulv.com`
 - High-risk versions show warning icon
 
 ---
@@ -52,6 +55,7 @@ Guide users to download legacy CapCut versions from ProjectBukkit by presenting 
 
 ## UI Requirements
 
+- **2-Column Grid Layout** (6 cards)
 - Cards have dark background with accent border when selected
 - Icon color changes to green when selected
 - Feature badges show with checkmarks

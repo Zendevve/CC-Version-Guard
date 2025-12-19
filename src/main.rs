@@ -28,26 +28,50 @@ const ARCHIVE_VERSIONS: &[ArchiveVersion] = &[
     ArchiveVersion {
         persona: "Offline Purist",
         version: "1.5.0",
-        description: "Clean UI, unrestricted 4K, zero cloud",
-        features: &["4K Export", "Offline Only", "No Nags"],
-        download_url: "https://github.com/ProjectBukkit/CapcutVersions/releases/tag/v1.5.0",
+        description: "Zero cloud dependencies. Unrestricted 4K export.",
+        features: &["Clean UI", "Offline Only", "No Nags"],
+        download_url: "https://lf16-capcut.faceulv.com/obj/capcutpc-packages-us/packages/CapCut_1_5_0_230_capcutpc_0.exe",
         risk_level: "Low",
     },
     ArchiveVersion {
         persona: "Audio Engineer",
         version: "2.5.4",
-        description: "Multi-track audio, stable mixer",
+        description: "Multi-track audio & stable mixer. The golden era.",
         features: &["Multi-Track", "Audio Mixer", "Keyframes"],
-        download_url: "https://github.com/ProjectBukkit/CapcutVersions/releases/tag/v2.5.4",
+        download_url: "https://lf16-capcut.faceulv.com/obj/capcutpc-packages-us/packages/CapCut_2_5_4_810_capcutpc_0_creatortool.exe",
         risk_level: "Low",
+    },
+    ArchiveVersion {
+        persona: "Classic Pro",
+        version: "2.9.0",
+        description: "Most free features before the generic paywalls.",
+        features: &["Max Free Features", "Stable", "Legacy UI"],
+        download_url: "https://lf16-capcut.faceulv.com/obj/capcutpc-packages-us/packages/CapCut_2_9_0_966_capcutpc_0_creatortool.exe",
+        risk_level: "Medium",
+    },
+    ArchiveVersion {
+        persona: "Modern Stable",
+        version: "3.2.0",
+        description: "Good balance of modern features vs paywalls.",
+        features: &["Modern UI", "Smooth", "Balanced"],
+        download_url: "https://lf16-capcut.faceulv.com/obj/capcutpc-packages-us/packages/CapCut_3_2_0_1106_capcutpc_0_creatortool.exe",
+        risk_level: "Medium",
     },
     ArchiveVersion {
         persona: "Creator",
         version: "3.9.0",
-        description: "Last free Auto-Captions (API risk)",
+        description: "Last version with free auto-captions (High Risk).",
         features: &["Auto-Captions", "AI Features", "Effects"],
-        download_url: "https://github.com/ProjectBukkit/CapcutVersions/releases/tag/v3.9.0",
+        download_url: "https://lf16-capcut.faceulv.com/obj/capcutpc-packages-us/packages/CapCut_3_9_0_1459_capcutpc_0_creatortool.exe",
         risk_level: "High",
+    },
+    ArchiveVersion {
+        persona: "Power User",
+        version: "4.0.0",
+        description: "Track height adjustment & markers. Stricter paywall.",
+        features: &["Track Zoom", "Markers", "Adv Features"],
+        download_url: "https://lf16-capcut.faceulv.com/obj/capcutpc-packages-us/packages/CapCut_4_0_0_1539_capcutpc_0_creatortool.exe",
+        risk_level: "Medium",
     },
 ];
 
@@ -395,89 +419,102 @@ impl CapCutGuardApp {
 
         ui.add_space(20.0);
 
-        // Persona cards
-        for (idx, archive) in ARCHIVE_VERSIONS.iter().enumerate() {
-            let is_selected = self.selected_archive_idx == Some(idx);
-            // Keep dark background, use accent BORDER for selection (better contrast)
-            let card_color = COLOR_BG_CARD;
-            let border = if is_selected {
-                egui::Stroke::new(2.0, COLOR_ACCENT)
-            } else {
-                egui::Stroke::new(1.0, COLOR_SECONDARY)
-            };
-
-            let frame_response = egui::Frame::none()
-                .fill(card_color)
-                .rounding(12.0)
-                .stroke(border)
-                .inner_margin(16.0)
-                .outer_margin(egui::Margin::symmetric(30.0, 4.0))
+        // Persona cards Grid
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::Grid::new("persona_grid")
+                .spacing(egui::vec2(16.0, 16.0))
+                .num_columns(2)
                 .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-
-                    ui.horizontal(|ui| {
-                        // Icon based on persona
-                        let icon = match idx {
-                            0 => egui_phosphor::fill::HARD_DRIVES,
-                            1 => egui_phosphor::fill::SPEAKER_HIGH,
-                            _ => egui_phosphor::fill::SPARKLE,
+                    for (idx, archive) in ARCHIVE_VERSIONS.iter().enumerate() {
+                        let is_selected = self.selected_archive_idx == Some(idx);
+                        let card_color = COLOR_BG_CARD;
+                        let border = if is_selected {
+                            egui::Stroke::new(2.0, COLOR_ACCENT)
+                        } else {
+                            egui::Stroke::new(1.0, COLOR_SECONDARY)
                         };
-                        let icon_color = if is_selected { COLOR_SUCCESS } else { COLOR_ACCENT };
-                        ui.label(egui::RichText::new(icon).size(28.0).color(icon_color));
-                        ui.add_space(12.0);
 
-                        ui.vertical(|ui| {
-                            ui.horizontal(|ui| {
-                                let title_color = if is_selected { COLOR_TEXT } else { COLOR_TEXT };
-                                ui.label(egui::RichText::new(archive.persona).size(15.0).strong().color(title_color));
-                                ui.label(egui::RichText::new(format!("v{}", archive.version)).size(11.0).color(COLOR_TEXT_DIM));
+                        let frame_response = egui::Frame::none()
+                            .fill(card_color)
+                            .rounding(12.0)
+                            .stroke(border)
+                            .inner_margin(16.0)
+                            .outer_margin(egui::Margin::symmetric(0.0, 0.0)) // Margin handled by spacing
+                            .show(ui, |ui| {
+                                ui.set_width(340.0); // Fixed width for consistent grid
 
-                                if archive.risk_level == "High" {
-                                    ui.label(egui::RichText::new(egui_phosphor::fill::WARNING).size(14.0).color(COLOR_WARNING));
-                                }
+                                ui.horizontal(|ui| {
+                                    // Icon based on persona
+                                    let icon = match idx {
+                                        0 => egui_phosphor::fill::HARD_DRIVES,
+                                        1 => egui_phosphor::fill::SPEAKER_HIGH,
+                                        2 => egui_phosphor::fill::FILM_STRIP,
+                                        3 => egui_phosphor::fill::SHIELD_CHECK,
+                                        4 => egui_phosphor::fill::SPARKLE,
+                                        5 => egui_phosphor::fill::GAUGE,
+                                        _ => egui_phosphor::regular::QUESTION,
+                                    };
+                                    let icon_color = if is_selected { COLOR_SUCCESS } else { COLOR_ACCENT };
+                                    ui.label(egui::RichText::new(icon).size(28.0).color(icon_color));
+                                    ui.add_space(12.0);
+
+                                    ui.vertical(|ui| {
+                                        ui.horizontal(|ui| {
+                                            let title_color = if is_selected { COLOR_TEXT } else { COLOR_TEXT };
+                                            ui.label(egui::RichText::new(archive.persona).size(15.0).strong().color(title_color));
+                                            ui.label(egui::RichText::new(format!("v{}", archive.version)).size(11.0).color(COLOR_TEXT_DIM));
+
+                                            if archive.risk_level == "High" {
+                                                ui.label(egui::RichText::new(egui_phosphor::fill::WARNING).size(14.0).color(COLOR_WARNING));
+                                            }
+                                        });
+                                        ui.label(egui::RichText::new(archive.description).size(11.0).color(COLOR_TEXT_MUTED));
+
+                                        ui.add_space(6.0);
+                                        ui.horizontal(|ui| {
+                                            for feature in archive.features {
+                                                let badge_color = if is_selected { COLOR_SUCCESS } else { COLOR_TEXT_DIM };
+                                                ui.label(egui::RichText::new(format!("{} {}", egui_phosphor::regular::CHECK, feature)).size(10.0).color(badge_color));
+                                            }
+                                        });
+                                    });
+                                });
                             });
-                            ui.label(egui::RichText::new(archive.description).size(11.0).color(COLOR_TEXT_MUTED));
 
-                            ui.add_space(6.0);
-                            ui.horizontal(|ui| {
-                                for feature in archive.features {
-                                    let badge_color = if is_selected { COLOR_SUCCESS } else { COLOR_TEXT_DIM };
-                                    ui.label(egui::RichText::new(format!("{} {}", egui_phosphor::regular::CHECK, feature)).size(10.0).color(badge_color));
-                                }
-                            });
-                        });
-                    });
+                        // Make the customized frame interactive
+                        let response = ui.interact(frame_response.response.rect, egui::Id::new(format!("card_{}", idx)), egui::Sense::click());
+                        if response.clicked() {
+                            self.selected_archive_idx = Some(idx);
+                        }
+
+                        if (idx + 1) % 2 == 0 {
+                            ui.end_row();
+                        }
+                    }
                 });
 
-            // Fix: Use the frame's response rect for click detection
-            let response = ui.interact(frame_response.response.rect, egui::Id::new(format!("card_{}", idx)), egui::Sense::click());
-            if response.clicked() {
-                self.selected_archive_idx = Some(idx);
-            }
-        }
+            ui.add_space(20.0);
 
-        ui.add_space(20.0);
+            ui.vertical_centered(|ui| {
+                if let Some(idx) = self.selected_archive_idx {
+                    let archive = &ARCHIVE_VERSIONS[idx];
 
-        ui.vertical_centered(|ui| {
-            if let Some(idx) = self.selected_archive_idx {
-                let archive = &ARCHIVE_VERSIONS[idx];
+                    // Download button - Direct Link
+                    let btn = egui::Button::new(
+                        egui::RichText::new(format!("{}  Download Installer (v{})", egui_phosphor::regular::DOWNLOAD_SIMPLE, archive.version))
+                            .size(16.0).strong().color(COLOR_TEXT)
+                    )
+                        .fill(COLOR_SUCCESS)
+                        .min_size(egui::vec2(280.0, 50.0))
+                        .rounding(8.0);
 
-                // Download button - opens browser to Uptodown
-                let btn = egui::Button::new(
-                    egui::RichText::new(format!("{}  Download from Uptodown", egui_phosphor::regular::ARROW_SQUARE_OUT))
-                        .size(14.0).strong().color(COLOR_TEXT)
-                )
-                    .fill(COLOR_SUCCESS)
-                    .min_size(egui::vec2(220.0, 44.0))
-                    .rounding(8.0);
+                    if ui.add(btn).clicked() {
+                        let _ = open::that(archive.download_url);
+                    }
 
-                if ui.add(btn).clicked() {
-                    let _ = open::that(archive.download_url);
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("Link provided by official ByteDance CDN").size(10.0).color(COLOR_TEXT_MUTED));
                 }
-
-                ui.add_space(8.0);
-                ui.label(egui::RichText::new("After downloading, run the installer").size(11.0).color(COLOR_TEXT_DIM));
-            }
 
             ui.add_space(16.0);
 
@@ -491,6 +528,7 @@ impl CapCutGuardApp {
             if ui.link(egui::RichText::new(format!("{} Back", egui_phosphor::regular::ARROW_LEFT)).size(12.0).color(COLOR_TEXT_DIM)).clicked() {
                 self.screen = WizardScreen::Welcome;
             }
+        });
         });
 
         self.render_footer(ui);
