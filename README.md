@@ -200,6 +200,19 @@ This tool modifies files in your CapCut installation directory. While it's desig
 
 ---
 
+## 💬 A Note from the Developer
+
+Hey! I'm a college student building this in my free time as a hobby project — and hopefully a portfolio piece to land my first dev job.
+
+**Why the SmartScreen warning?** Code signing certificates cost $200-400/year, which is... a lot when you're living on instant noodles. The app is fully open-source, so you can [read every line of code](src/main.rs) before running it.
+
+If you find this useful:
+- ⭐ **Star the repo** — it helps with visibility
+- 🐛 **Report bugs** — I actually fix them
+- 💼 **Hiring?** — [Let's talk](https://github.com/Zendevve)
+
+---
+
 ## 📄 License
 
 MIT © [Zendevve](https://github.com/Zendevve)
@@ -208,8 +221,8 @@ MIT © [Zendevve](https://github.com/Zendevve)
 
 <div align="center">
 
-**Built with Rust 🦀 and caffeine ☕**
+**Built with Rust 🦀 and instant noodles 🍜**
 
-*If this helped you, consider starring the repo!*
+*Made with love by a broke college student who just wants to help people keep their software.*
 
 </div>
